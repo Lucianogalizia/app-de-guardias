@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# secrets reales
+.streamlit/secrets.toml
+
+# sqlite local
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# editor/os
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+~$*.xlsx
