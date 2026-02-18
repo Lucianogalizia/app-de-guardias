@@ -18,6 +18,31 @@ def _col(df: pd.DataFrame, *candidates: str) -> Optional[str]:
     return None
 
 
+def _norm_legajo(x) -> str:
+    """
+    Normaliza legajos/ids que vienen desde Excel:
+    - Convierte NaN a ""
+    - Convierte floats tipo 5474.0 -> "5474"
+    - Recorta espacios
+    """
+    if pd.isna(x):
+        return ""
+    # Si viene numérico, lo pasamos a int cuando corresponda
+    if isinstance(x, (int,)):
+        return str(x).strip()
+    if isinstance(x, float):
+        # Si es entero en float (5474.0) => 5474
+        if float(x).is_integer():
+            return str(int(x)).strip()
+        return str(x).strip()
+
+    s = str(x).strip()
+    # Caso típico cuando Excel lo trae como string con .0
+    if s.endswith(".0") and s[:-2].isdigit():
+        return s[:-2].strip()
+    return s
+
+
 def import_maestro_general(excel_bytes: bytes) -> Tuple[List[Dict[str, Any]], List[str]]:
     warnings: List[str] = []
     xls = pd.ExcelFile(io.BytesIO(excel_bytes))
@@ -40,10 +65,14 @@ def import_maestro_general(excel_bytes: bytes) -> Tuple[List[Dict[str, Any]], Li
 
     if not c_legajo or not c_cuil or not c_nombre or not c_leader:
         missing = []
-        if not c_legajo: missing.append("Legajo (o Legajo Clear)")
-        if not c_cuil: missing.append("CUIL")
-        if not c_nombre: missing.append("Nombre y Apellido (o Nombre)")
-        if not c_leader: missing.append("leader_legajo (o Lider/Líder/Jefe)")
+        if not c_legajo:
+            missing.append("Legajo (o Legajo Clear)")
+        if not c_cuil:
+            missing.append("CUIL")
+        if not c_nombre:
+            missing.append("Nombre y Apellido (o Nombre)")
+        if not c_leader:
+            missing.append("leader_legajo (o Lider/Líder/Jefe)")
         raise ValueError("Faltan columnas requeridas en 'General': " + ", ".join(missing))
 
     c_funcion = _col(df, "FUNCIÓN", "Función", "Funcion")
@@ -52,18 +81,19 @@ def import_maestro_general(excel_bytes: bytes) -> Tuple[List[Dict[str, Any]], Li
 
     rows: List[Dict[str, Any]] = []
     for _, r in df.iterrows():
-        legajo = str(r[c_legajo]).strip() if pd.notna(r[c_legajo]) else ""
+        legajo = _norm_legajo(r[c_legajo])
         if not legajo:
             continue
 
+        # CUIL lo dejamos como string "tal cual" (sin normalizar a int)
         cuil = str(r[c_cuil]).strip() if pd.notna(r[c_cuil]) else ""
         nombre = str(r[c_nombre]).strip() if pd.notna(r[c_nombre]) else ""
-        leader_legajo = str(r[c_leader]).strip() if pd.notna(r[c_leader]) else ""
+        leader_legajo = _norm_legajo(r[c_leader])
 
         if not cuil or not nombre or not leader_legajo:
             warnings.append(f"Legajo {legajo}: faltan datos (CUIL/NOMBRE/LÍDER).")
 
-        extra = {}
+        extra: Dict[str, Any] = {}
         for col in df.columns:
             if col in {c_legajo, c_cuil, c_nombre, c_leader, c_funcion, c_origen, c_lugar}:
                 continue
